@@ -1,115 +1,105 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Agentic AI Infrastructure
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Minimal infrastructure for generating TypeScript-compatible JavaScript and running it on a remote server over SSH.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+This project is a small NestJS backend that accepts a prompt, asks an OpenAI-compatible model provider to produce executable JavaScript, copies that code to a configured remote machine, executes it there with Node.js, and returns the remote stdout.
 
-## Description
+## Objective
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+The goal is to provide the smallest useful backend for remote TypeScript execution experiments:
 
-## Project setup
+- expose an HTTP API for code-generation requests;
+- connect to a remote execution host over SSH;
+- run generated TypeScript-compatible JavaScript in an isolated remote environment;
+- keep model provider credentials, SSH credentials, and execution host details outside the source code.
+
+The generated code is expected to be plain JavaScript that can run directly with `node`. TypeScript-only syntax such as type annotations, interfaces, enums, and generics should not be emitted by the model.
+
+## Architecture
+
+The main flow is handled by `POST /llm`:
+
+1. The request body supplies a natural-language prompt in `message`.
+2. The LLM service asks the configured OpenAI-compatible/vLLM provider for executable JavaScript.
+3. The controller encodes the generated code, writes it to a temporary file on the remote server, and runs it with Node.js through SSH.
+4. The API returns stdout from the remote command.
+
+There is also a lower-level `POST /ssh` endpoint that runs a supplied command through the configured SSH connection.
+
+## Configuration
+
+Copy the example environment file and fill in local values:
 
 ```bash
-$ pnpm install
-$ cp .env.example .env
+pnpm install
+cp .env.example .env
 ```
 
 Required environment variables:
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `VAST_BASE_URL`
-- `VAST_AUTH_URL`
-- `VAST_MODEL`
-- `SSH_HOST`
-- `SSH_USERNAME`
-- `SSH_PRIVATE_KEY_PATH`
+| Variable | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Required by current env validation. Use a placeholder only if the active flow uses the Vast/vLLM cookie auth path. |
+| `OPENAI_MODEL` | Required by current env validation. Use the default placeholder unless the OpenAI client path needs it. |
+| `VAST_BASE_URL` | Base URL for the OpenAI-compatible/vLLM API. It may be either the server root or a `/v1` URL. |
+| `VAST_AUTH_URL` | URL used to obtain the Vast/vLLM auth cookie. Do not commit real tokens. |
+| `VAST_MODEL` | Model name to pass to the chat-completions request. |
+| `SSH_HOST` | Hostname or IP address of the remote execution server. |
+| `SSH_USERNAME` | SSH username for the remote execution server. |
+| `SSH_PRIVATE_KEY_PATH` | Local filesystem path to the SSH private key used for the remote connection. |
 
 Optional environment variables:
 
-- `PORT` defaults to `3000`
-- `SSH_PORT` defaults to `22`
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `3000` | Local NestJS server port. |
+| `SSH_PORT` | `22` | SSH port on the remote execution server. |
 
-## Compile and run the project
+## Running Locally
 
 ```bash
 # development
-$ pnpm run start
+pnpm run start
 
 # watch mode
-$ pnpm run start:dev
+pnpm run start:dev
 
-# production mode
-$ pnpm run start:prod
+# production build
+pnpm run build
+pnpm run start:prod
 ```
 
-## Run tests
+## Usage
+
+Generate and execute code on the remote server:
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+curl -X POST http://127.0.0.1:3000/llm \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Write a code to traverse a binary tree."}'
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Run a direct SSH command through the configured remote server:
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+curl -X POST http://127.0.0.1:3000/ssh \
+  -H "Content-Type: application/json" \
+  -d '{"command": "node --version"}'
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Security Notes
 
-## Resources
+- Never commit `.env`, private keys, auth cookies, provider tokens, or generated cookie files.
+- Keep `SSH_PRIVATE_KEY_PATH` pointed at a local private key file outside the repository.
+- Restrict the private key file to the local user, for example with `chmod 600`.
+- Treat the remote server as an execution sandbox. Generated code is executed there, so it should not have access to sensitive production data or privileged infrastructure.
+- Prefer a dedicated remote user with limited permissions for this project.
+- Rotate any token, cookie, or key that was accidentally committed or shared.
 
-Check out a few resources that may come in handy when working with NestJS:
+## Tests
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```bash
+pnpm run test
+pnpm run test:e2e
+pnpm run test:cov
+```

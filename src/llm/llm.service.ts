@@ -21,31 +21,40 @@ Rules:
 
 `.trim();
 
+export function buildVllmOpenAIBaseURL(baseURL: string): string {
+  const normalizedBaseURL = baseURL.replace(/\/$/, '');
+
+  if (normalizedBaseURL.endsWith('/v1')) {
+    return normalizedBaseURL;
+  }
+
+  return `${normalizedBaseURL}/v1`;
+}
+
 @Injectable()
 export class LlmService {
   private client: OpenAI;
   private cookie: string;
 
-  constructor(
-    private readonly openai: OpenAI,
-    private readonly configService: ConfigService<AppEnv, true>,
-  ) {}
+  constructor(private readonly configService: ConfigService<AppEnv, true>) {}
 
   async onModuleInit() {
-    // this.cookie = await this.getAuthCookie();
-    // this.client = new OpenAI({
-    //   apiKey: 'not-needed',
-    //   baseURL: this.configService.getOrThrow<string>('VAST_BASE_URL', {
-    //     infer: true,
-    //   }),
-    //   defaultHeaders: {
-    //     Cookie: this.cookie,
-    //   },
-    // });
+    this.cookie = await this.getAuthCookie();
+    this.client = new OpenAI({
+      apiKey: 'not-needed',
+      baseURL: buildVllmOpenAIBaseURL(
+        this.configService.getOrThrow('VAST_BASE_URL', {
+          infer: true,
+        }),
+      ),
+      defaultHeaders: {
+        Cookie: this.cookie,
+      },
+    });
   }
 
   private async getAuthCookie(): Promise<string> {
-    const url = this.configService.getOrThrow<string>('VAST_AUTH_URL', {
+    const url = this.configService.getOrThrow('VAST_AUTH_URL', {
       infer: true,
     });
     const response = await fetch(url, {
@@ -63,7 +72,7 @@ export class LlmService {
 
   async chat(message: string) {
     const response = await this.client.chat.completions.create({
-      model: this.configService.getOrThrow<string>('VAST_MODEL', {
+      model: this.configService.getOrThrow('VAST_MODEL', {
         infer: true,
       }),
       messages: [
@@ -74,6 +83,6 @@ export class LlmService {
         { role: 'user', content: message },
       ],
     });
-    return response.choices[0].message.content;
+    return response.choices[0]?.message.content ?? null;
   }
 }

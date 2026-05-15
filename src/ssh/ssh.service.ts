@@ -22,9 +22,7 @@ export class SshService {
         host: this.configService.getOrThrow<string>('SSH_HOST', {
           infer: true,
         }),
-        port: this.configService.getOrThrow<number>('SSH_PORT', {
-          infer: true,
-        }),
+        port: this.configService.getOrThrow<number>('SSH_PORT'),
         username: this.configService.getOrThrow<string>('SSH_USERNAME', {
           infer: true,
         }),
